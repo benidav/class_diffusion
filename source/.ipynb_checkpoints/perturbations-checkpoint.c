@@ -9370,83 +9370,19 @@ int perturbations_derivs(double tau,
         ca2 = w_fld - w_prime_fld / 3. / (1.+w_fld) / a_prime_over_a;
         cs2 = pba->cs2_fld;
 
-        if (pba->has_ddf == _TRUE_) {
+        /** - ----> fluid density */
 
-          /** - ----> DDF: diffusive dark fluid perturbations (Sahlu & Abebe 2025)
-           *
-           * Interaction kernel (conformal time): aQ = alpha_ddf * H_conf * rho_cdm
-           *   where H_conf = a_prime_over_a (conformal Hubble).
-           *
-           * Ratio needed for DE source terms:
-           *   aQ / rho_fld = alpha_ddf * H_conf * rho_cdm / rho_fld
-           *
-           * In synchronous gauge theta_cdm = 0 (gauge choice, OPTION A: energy-only
-           * transfer via Q^mu = Q * u^mu_cdm with no spatial momentum transfer).
-           * The variable theta_cdm already holds 0 in synchronous gauge and the
-           * actual value y[index_pt_theta_cdm] in Newtonian gauge, so no special
-           * casing is needed here — use the local theta_cdm directly.
-           */
+        dy[pv->index_pt_delta_fld] =
+          -(1+w_fld)*(y[pv->index_pt_theta_fld]+metric_continuity)
+          -3.*(cs2-w_fld)*a_prime_over_a*y[pv->index_pt_delta_fld]
+          -9.*(1+w_fld)*(cs2-ca2)*a_prime_over_a*a_prime_over_a*y[pv->index_pt_theta_fld]/k2;
 
-          double aQ_over_rho_fld = pba->alpha_ddf * a_prime_over_a
-                                   * pvecback[pba->index_bg_rho_cdm]
-                                   / pvecback[pba->index_bg_rho_fld];
+        /** - ----> fluid velocity */
 
-          /* Read CDM perturbations from the state vector.
-             In synchronous gauge theta_cdm = 0 by gauge choice (OPTION A:
-             energy-only transfer); index_pt_theta_cdm is only allocated in
-             Newtonian gauge, so we must not dereference it here. */
-          double ddf_delta_cdm = y[pv->index_pt_delta_cdm];
-          double ddf_theta_cdm = (ppt->gauge == synchronous) ? 0.
-                                 : y[pv->index_pt_theta_cdm];
-
-          /** - ----> DDF fluid density contrast
-           *
-           *  delta'_fld = -(1+w)(theta_fld + h'/2)
-           *               - 3*H*(cs2 - w)*delta_fld
-           *               - 9*(1+w)*(cs2 - ca2)*H^2*theta_fld/k^2   [entropic term]
-           *               - (aQ/rho_fld) * (delta_cdm - delta_fld)  [interaction]
-           */
-          dy[pv->index_pt_delta_fld] =
-            -(1.+w_fld)*(y[pv->index_pt_theta_fld]+metric_continuity)
-            -3.*(cs2-w_fld)*a_prime_over_a*y[pv->index_pt_delta_fld]
-            -9.*(1.+w_fld)*(cs2-ca2)*a_prime_over_a*a_prime_over_a*y[pv->index_pt_theta_fld]/k2
-            - aQ_over_rho_fld * (ddf_delta_cdm - y[pv->index_pt_delta_fld]);
-
-          /** - ----> DDF fluid velocity divergence
-           *
-           *  theta'_fld = -(1 - 3*cs2)*H*theta_fld
-           *               + cs2*k^2*delta_fld/(1+w)
-           *               + metric_euler
-           *               + (aQ/rho_fld)/(1+w) * (theta_cdm - theta_fld) [momentum exchange]
-           *
-           * In synchronous gauge theta_cdm = 0, so the last term is
-           * -(aQ/rho_fld)/(1+w) * theta_fld, which damps DE velocity
-           * relative to CDM rest frame.
-           */
-          dy[pv->index_pt_theta_fld] =
-            -(1.-3.*cs2)*a_prime_over_a*y[pv->index_pt_theta_fld]
-            +cs2*k2/(1.+w_fld)*y[pv->index_pt_delta_fld]
-            +metric_euler
-            + aQ_over_rho_fld/(1.+w_fld) * (ddf_theta_cdm - y[pv->index_pt_theta_fld]);
-
-        }
-        else {
-
-          /** - ----> standard (no interaction) fluid density */
-
-          dy[pv->index_pt_delta_fld] =
-            -(1+w_fld)*(y[pv->index_pt_theta_fld]+metric_continuity)
-            -3.*(cs2-w_fld)*a_prime_over_a*y[pv->index_pt_delta_fld]
-            -9.*(1+w_fld)*(cs2-ca2)*a_prime_over_a*a_prime_over_a*y[pv->index_pt_theta_fld]/k2;
-
-          /** - ----> standard (no interaction) fluid velocity */
-
-          dy[pv->index_pt_theta_fld] = /* fluid velocity */
-            -(1.-3.*cs2)*a_prime_over_a*y[pv->index_pt_theta_fld]
-            +cs2*k2/(1.+w_fld)*y[pv->index_pt_delta_fld]
-            +metric_euler;
-
-        }
+        dy[pv->index_pt_theta_fld] = /* fluid velocity */
+          -(1.-3.*cs2)*a_prime_over_a*y[pv->index_pt_theta_fld]
+          +cs2*k2/(1.+w_fld)*y[pv->index_pt_delta_fld]
+          +metric_euler;
       }
       else {
         dy[pv->index_pt_Gamma_fld] = ppw->Gamma_prime_fld; /* Gamma variable of PPF formalism */

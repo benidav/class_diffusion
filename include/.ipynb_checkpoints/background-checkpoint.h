@@ -66,8 +66,7 @@ struct background
   double Omega0_ur; /**< \f$ \Omega_{0 \nu r} \f$: ultra-relativistic neutrinos */
 
   double Omega0_cdm;      /**< \f$ \Omega_{0 cdm} \f$: cold dark matter */
-  double Q_dm; /**< Legacy diffusive dark fluid coupling parameter (= alpha_ddf).
-                   Kept for backwards compatibility; prefer alpha_ddf for new code. */
+  double Q_dm; /* Diffusive dark fluid parameter */
 
   double Omega0_idm; /**< \f$ \Omega_{0 idm} \f$: interacting dark matter with photons, baryons, and idr */
 
@@ -113,14 +112,6 @@ struct background
   double wa_fld;   /**< \f$ wa_{DE} \f$: fluid equation of state parameter derivative */
   double cs2_fld;  /**< \f$ c^2_{s~DE} \f$: sound speed of the fluid in the frame comoving with the fluid (so, this is
                       not [delta p/delta rho] in the synchronous or newtonian gauge!) */
-
-  /* ---- DIFFUSIVE DARK FLUID (DDF) ---- */
-  double alpha_ddf; /**< dimensionless DM–DE diffusion coupling:
-                       Q = alpha_ddf * H * rho_cdm  (Q > 0: DM loses energy to DE).
-                       Identical to Q_dm in the Sahlu & Abebe (2025) notation. */
-  short has_ddf;    /**< _TRUE_ if the diffusive dark fluid interaction is active
-                       (i.e. alpha_ddf != 0 and fluid DE is present) */
-  /* ------------------------------------- */
   double Omega_EDE;        /**< \f$ wa_{DE} \f$: Early Dark Energy density parameter */
   double * scf_parameters; /**< list of parameters describing the scalar field potential */
   short attractor_ic_scf;  /**< whether the scalar field has attractor initial conditions */

@@ -3314,28 +3314,7 @@ int input_read_parameters_species(struct file_content * pfc,
       class_read_double("Omega_EDE",pba->Omega_EDE);
       class_read_double("cs2_fld",pba->cs2_fld);
     }
-
-    /** 8.a.3) Diffusive dark fluid (DDF) coupling — Q = alpha_ddf * H * rho_cdm */
-    class_read_double("alpha_ddf", pba->alpha_ddf);
-
-    /* Backwards compatibility: if alpha_ddf was not set but Q_dm was,
-       promote Q_dm to alpha_ddf so both entry points do the same thing. */
-    if (pba->alpha_ddf == 0. && pba->Q_dm != 0.)
-      pba->alpha_ddf = pba->Q_dm;
-
-    /* Gate flag: DDF is active only when fluid DE is present AND alpha != 0 */
-    if (pba->alpha_ddf != 0.)
-      pba->has_ddf = _TRUE_;
-    else
-      pba->has_ddf = _FALSE_;
-
-    class_test((pba->has_ddf == _TRUE_) && (pba->use_ppf == _TRUE_),
-               errmsg,
-               "Diffusive dark fluid (alpha_ddf != 0) is not compatible with the PPF "
-               "approximation (use_ppf = yes). Set 'use_ppf = no' and choose w0_fld "
-               "slightly different from -1 (e.g. w0_fld = -0.999).");
-
-  } /* end of if (pba->Omega0_fld != 0.) */
+  }
 
   /** 8.b) If Omega scalar field (SCF) is different from 0 */
   if (pba->Omega0_scf != 0.){
@@ -5940,9 +5919,6 @@ int input_default_params(struct background *pba,
   pba->wa_fld = 0.;
   /** 9.a.2.2) 'EDE' case */
   pba->Omega_EDE = 0.;
-  /** 9.a.3) Diffusive dark fluid (DDF) coupling */
-  pba->alpha_ddf = 0.;   /* LCDM limit: no DM-DE energy transfer */
-  pba->has_ddf   = _FALSE_;
   /** 9.b) Omega scalar field */
   /** 9.b.1) Potential parameters and initial conditions */
   pba->scf_parameters = NULL;
