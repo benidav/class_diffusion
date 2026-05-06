@@ -472,13 +472,21 @@ struct perturbations_vector
   int index_pt_delta_b;   /**< baryon density */
   int index_pt_theta_b;   /**< baryon velocity */
   int index_pt_delta_cdm; /**< cdm density */
-  int index_pt_theta_cdm; /**< cdm velocity */
+  int index_pt_theta_cdm; /**< cdm velocity divergence.
+                               NOTE (DDF): In the standard synchronous gauge theta_cdm = 0
+                               by gauge choice. When the diffusive dark fluid interaction
+                               (has_ddf == _TRUE_) is active and OPTION B momentum transfer
+                               is enabled, this variable becomes dynamical. Even under
+                               OPTION A (energy-only transfer), its index is used when
+                               computing the DE source term aQ/rho_fld*(theta_cdm - theta_fld). */
   int index_pt_delta_idm; /**< idm density */
   int index_pt_theta_idm; /**< idm velocity */
   int index_pt_delta_dcdm; /**< dcdm density */
   int index_pt_theta_dcdm; /**< dcdm velocity */
-  int index_pt_delta_fld;  /**< dark energy density in true fluid case */
-  int index_pt_theta_fld;  /**< dark energy velocity in true fluid case */
+  int index_pt_delta_fld;  /**< dark energy density in true fluid case.
+                               DDF source term: -aQ_over_rho_fld*(delta_cdm - delta_fld) */
+  int index_pt_theta_fld;  /**< dark energy velocity in true fluid case.
+                               DDF source term: +aQ_over_rho_fld/(1+w)*(theta_cdm - theta_fld) */
   int index_pt_Gamma_fld;  /**< unique dark energy dynamical variable in PPF case */
   int index_pt_phi_scf;  /**< scalar field density */
   int index_pt_phi_prime_scf;  /**< scalar field velocity */
@@ -598,6 +606,15 @@ struct perturbations_workspace
   double * shear_ncdm;	/**< shear for each ncdm species */
 
   double delta_m;	/**< relative density perturbation of all non-relativistic species */
+
+  /* ---- DIFFUSIVE DARK FLUID workspace (DDF, Sahlu & Abebe 2025) ----
+   * No new indices are required here: all quantities needed by the DDF
+   * perturbation equations are already tracked via the standard indices
+   * above (index_pt_delta_cdm, index_pt_theta_cdm, index_pt_delta_fld,
+   * index_pt_theta_fld) and via pvecback (index_bg_rho_cdm,
+   * index_bg_rho_fld).  The flag pba->has_ddf gates the modified
+   * equations inside perturb_derivs().
+   * ----------------------------------------------------------------- */
   double theta_m;	/**< velocity divergence theta of all non-relativistic species */
 
   double delta_cb;       /**< relative density perturbation of only cdm and baryon */

@@ -779,35 +779,9 @@ int perturbations_init(
 
     if (pba->use_ppf == _FALSE_) {
 
-      /* Check for phantom crossing between a->0 and a=1: the fluid
-         perturbation equations diverge whenever 1+w_fld = 0. */
       class_test((w_fld_ini +1.0)*(w_fld_0+1.0) <= 0.0,
                  ppt->error_message,
                  "w crosses -1 between the infinite past and today, and this would lead to divergent perturbation equations for the fluid perturbations. Try to switch to PPF scheme: use_ppf = yes");
-
-      /* Check that w_fld stays a safe numerical distance from -1 at both
-         endpoints.  The fluid Euler equation contains cs2*k^2*delta/(1+w)
-         and, when has_ddf=yes, also aQ/(rho*(1+w)); both blow up as
-         1+w -> 0.  Exact equality (w0=-1, wa=0) is caught below, but any
-         value with |1+w| < _W_FLD_SAFETY_ also makes the ODE stiff to the
-         point of being unphysical.  The threshold 1e-3 corresponds to
-         w0 > -0.999; tighten or loosen via this single constant if needed. */
-#define _W_FLD_SAFETY_ 1e-3
-      class_test(fabs(w_fld_ini + 1.0) < _W_FLD_SAFETY_,
-                 ppt->error_message,
-                 "w_fld at early times (a->0) is w_ini = %.6e, which is within %g of -1. "
-                 "The fluid perturbation equations (including the DDF momentum-exchange term) "
-                 "diverge as 1+w -> 0. Use use_ppf = yes, or choose parameters such that "
-                 "|1+w_fld| > %g everywhere.",
-                 w_fld_ini, _W_FLD_SAFETY_, _W_FLD_SAFETY_);
-
-      class_test(fabs(w_fld_0 + 1.0) < _W_FLD_SAFETY_,
-                 ppt->error_message,
-                 "w_fld today is w_0 = %.6e, which is within %g of -1. "
-                 "The fluid perturbation equations (including the DDF momentum-exchange term) "
-                 "diverge as 1+w -> 0. Use use_ppf = yes, or choose parameters such that "
-                 "|1+w_fld| > %g everywhere.",
-                 w_fld_0, _W_FLD_SAFETY_, _W_FLD_SAFETY_);
 
       /* the next check is meaningful at least for w(a) = w0 + wa*(1-a/a0); for general formulas and with use_ppf=no, you may prefer to comment it out... */
       class_test((w_fld_0 == -1.) && (dw_over_da_fld == 0.),
@@ -8000,14 +7974,6 @@ int perturbations_sources(
 
       class_call(background_w_fld(pba,a,&w_fld,&dw_over_da_fld,&integral_fld), pba->error_message, ppt->error_message);
 
-      /* rho_plus_p_theta_fld stores (1+w)*rho*theta; dividing by (1+w)*rho
-         recovers theta.  Use the same safety threshold used in the ODE. */
-      class_test(fabs(1.+w_fld) < _W_FLD_SAFETY_,
-                 ppt->error_message,
-                 "Cannot compute theta_fld source: w_fld = %.6e is within %g of -1 "
-                 "(source output would diverge). Use use_ppf = yes.",
-                 w_fld, _W_FLD_SAFETY_);
-
       _set_source_(ppt->index_tp_theta_fld) = ppw->rho_plus_p_theta_fld/(1.+w_fld)/pvecback[pba->index_bg_rho_fld]
         + theta_shift; // N-body gauge correction
     }
@@ -9401,118 +9367,22 @@ int perturbations_derivs(double tau,
         class_call(background_w_fld(pba,a,&w_fld,&dw_over_da_fld,&integral_fld), pba->error_message, ppt->error_message);
         w_prime_fld = dw_over_da_fld * a_prime_over_a * a;
 
-        /* Compute 1+w_fld once and cache it.  Every branch below divides by
-           this quantity (pressure-gradient term cs2*k^2*delta/(1+w), adiabatic
-           sound speed ca2, and, in the DDF branch, the momentum-exchange term
-           aQ/(rho*(1+w))).  A single cached value avoids silent recomputation
-           and makes the safety check unambiguous. */
-        double one_plus_w_fld = 1. + w_fld;
-
-        /* Belt-and-suspenders guard: the endpoint checks at initialisation
-           (_W_FLD_SAFETY_) should already have aborted if |1+w| is too small,
-           but w(a) can drift during integration for general EoS models.  Catch
-           any such drift here so the ODE driver never divides by zero or
-           produces a NaN that silently propagates. */
-        class_test(fabs(one_plus_w_fld) < _W_FLD_SAFETY_,
-                   ppt->error_message,
-                   "During perturbation integration at a=%.6e, w_fld = %.6e is within %g "
-                   "of -1. The fluid Euler equation (and DDF momentum-exchange term) diverge. "
-                   "Use use_ppf = yes, or ensure |1+w_fld| > %g at all times.",
-                   a, w_fld, _W_FLD_SAFETY_, _W_FLD_SAFETY_);
-
-        ca2 = w_fld - w_prime_fld / 3. / one_plus_w_fld / a_prime_over_a;
+        ca2 = w_fld - w_prime_fld / 3. / (1.+w_fld) / a_prime_over_a;
         cs2 = pba->cs2_fld;
 
-        if (pba->has_ddf == _TRUE_) {
+        /** - ----> fluid density */
 
-          /** - ----> DDF: diffusive dark fluid perturbations (Sahlu & Abebe 2025)
-           *
-           * Interaction kernel (conformal time): aQ = alpha_ddf * H_conf * rho_cdm
-           *   where H_conf = a_prime_over_a (conformal Hubble).
-           *
-           * Ratio needed for DE source terms:
-           *   aQ / rho_fld = alpha_ddf * H_conf * rho_cdm / rho_fld
-           *
-           * In synchronous gauge theta_cdm = 0 (gauge choice, OPTION A: energy-only
-           * transfer via Q^mu = Q * u^mu_cdm with no spatial momentum transfer).
-           * The variable theta_cdm already holds 0 in synchronous gauge and the
-           * actual value y[index_pt_theta_cdm] in Newtonian gauge, so no special
-           * casing is needed here — use the local theta_cdm directly.
-           *
-           * NOTE on the 1/(1+w) denominators below:
-           *   Both the pressure-gradient term  cs2*k^2*delta/(1+w)  and the
-           *   momentum-exchange term  (aQ/rho)/(1+w)*(theta_cdm - theta_fld)
-           *   come from projecting the interacting-fluid energy-momentum tensor
-           *   onto the Euler equation.  The combination (rho+p)*theta is the
-           *   natural evolved variable; dividing by (1+w)*rho recovers theta.
-           *   We reuse one_plus_w_fld (computed and guarded above) so that both
-           *   divisions are protected by the single class_test.
-           */
+        dy[pv->index_pt_delta_fld] =
+          -(1+w_fld)*(y[pv->index_pt_theta_fld]+metric_continuity)
+          -3.*(cs2-w_fld)*a_prime_over_a*y[pv->index_pt_delta_fld]
+          -9.*(1+w_fld)*(cs2-ca2)*a_prime_over_a*a_prime_over_a*y[pv->index_pt_theta_fld]/k2;
 
-          double aQ_over_rho_fld = pba->alpha_ddf * a_prime_over_a
-                                   * pvecback[pba->index_bg_rho_cdm]
-                                   / pvecback[pba->index_bg_rho_fld];
+        /** - ----> fluid velocity */
 
-          /* Read CDM perturbations from the state vector.
-             In synchronous gauge theta_cdm = 0 by gauge choice (OPTION A:
-             energy-only transfer); index_pt_theta_cdm is only allocated in
-             Newtonian gauge, so we must not dereference it here. */
-          double ddf_delta_cdm = y[pv->index_pt_delta_cdm];
-          double ddf_theta_cdm = (ppt->gauge == synchronous) ? 0.
-                                 : y[pv->index_pt_theta_cdm];
-
-          /** - ----> DDF fluid density contrast
-           *
-           *  delta'_fld = -(1+w)(theta_fld + h'/2)
-           *               - 3*H*(cs2 - w)*delta_fld
-           *               - 9*(1+w)*(cs2 - ca2)*H^2*theta_fld/k^2   [entropic term]
-           *               - (aQ/rho_fld) * (delta_cdm - delta_fld)  [interaction]
-           */
-          dy[pv->index_pt_delta_fld] =
-            -one_plus_w_fld*(y[pv->index_pt_theta_fld]+metric_continuity)
-            -3.*(cs2-w_fld)*a_prime_over_a*y[pv->index_pt_delta_fld]
-            -9.*one_plus_w_fld*(cs2-ca2)*a_prime_over_a*a_prime_over_a*y[pv->index_pt_theta_fld]/k2
-            - aQ_over_rho_fld * (ddf_delta_cdm - y[pv->index_pt_delta_fld]);
-
-          /** - ----> DDF fluid velocity divergence
-           *
-           *  theta'_fld = -(1 - 3*cs2)*H*theta_fld
-           *               + cs2*k^2*delta_fld/(1+w)              [pressure gradient]
-           *               + metric_euler
-           *               + (aQ/rho_fld)/(1+w) * (theta_cdm - theta_fld) [momentum exchange]
-           *
-           * In synchronous gauge theta_cdm = 0, so the last term is
-           * -(aQ/rho_fld)/(1+w) * theta_fld, which damps DE velocity
-           * relative to CDM rest frame.
-           *
-           * Both /(1+w) divisions use one_plus_w_fld, which is guarded above.
-           */
-          dy[pv->index_pt_theta_fld] =
-            -(1.-3.*cs2)*a_prime_over_a*y[pv->index_pt_theta_fld]
-            +cs2*k2/one_plus_w_fld*y[pv->index_pt_delta_fld]
-            +metric_euler
-            + aQ_over_rho_fld/one_plus_w_fld * (ddf_theta_cdm - y[pv->index_pt_theta_fld]);
-
-        }
-        else {
-
-          /** - ----> standard (no interaction) fluid density */
-
-          dy[pv->index_pt_delta_fld] =
-            -one_plus_w_fld*(y[pv->index_pt_theta_fld]+metric_continuity)
-            -3.*(cs2-w_fld)*a_prime_over_a*y[pv->index_pt_delta_fld]
-            -9.*one_plus_w_fld*(cs2-ca2)*a_prime_over_a*a_prime_over_a*y[pv->index_pt_theta_fld]/k2;
-
-          /** - ----> standard (no interaction) fluid velocity
-           *  Uses one_plus_w_fld (computed and guarded above) to avoid
-           *  recomputing 1+w and to share the same divergence protection. */
-
-          dy[pv->index_pt_theta_fld] = /* fluid velocity */
-            -(1.-3.*cs2)*a_prime_over_a*y[pv->index_pt_theta_fld]
-            +cs2*k2/one_plus_w_fld*y[pv->index_pt_delta_fld]
-            +metric_euler;
-
-        }
+        dy[pv->index_pt_theta_fld] = /* fluid velocity */
+          -(1.-3.*cs2)*a_prime_over_a*y[pv->index_pt_theta_fld]
+          +cs2*k2/(1.+w_fld)*y[pv->index_pt_delta_fld]
+          +metric_euler;
       }
       else {
         dy[pv->index_pt_Gamma_fld] = ppw->Gamma_prime_fld; /* Gamma variable of PPF formalism */

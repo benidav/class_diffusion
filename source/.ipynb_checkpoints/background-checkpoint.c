@@ -436,17 +436,8 @@ int background_functions(
 
   /* cdm */
   if (pba->has_cdm == _TRUE_) {
-    if (pba->has_ddf == _TRUE_) {
-      /** DDF: rho_cdm follows the analytic solution of
-          d(rho_cdm)/dloga = -(3 - alpha_ddf)*rho_cdm
-          => rho_cdm = Omega0_cdm * H0^2 * (a/a0)^{-(3-alpha_ddf)}
-          Consistency check: setting alpha_ddf=0 recovers the standard a^{-3} scaling. */
-      pvecback[pba->index_bg_rho_cdm] = pba->Omega0_cdm * pow(pba->H0,2) * pow(1.0/a, 3. - pba->alpha_ddf);
-    }
-    else {
-      /** pvecback[pba->index_bg_rho_cdm] = pba->Omega0_cdm * pow(pba->H0,2) / pow(a,3);*/
-      pvecback[pba->index_bg_rho_cdm] = (pba->Omega0_cdm + pba->Q_dm * (a/1.0 - 1.0)) * pow(pba->H0,2) * pow(1.0/a,3);
-    }
+    /** pvecback[pba->index_bg_rho_cdm] = pba->Omega0_cdm * pow(pba->H0,2) / pow(a,3);*/
+    pvecback[pba->index_bg_rho_cdm] = (pba->Omega0_cdm + pba->Q_dm * (a/a0 - 1.0)) * pow(H0,2) * pow(a0/a,3);
     rho_tot += pvecback[pba->index_bg_rho_cdm];
     p_tot += 0.;
     rho_m += pvecback[pba->index_bg_rho_cdm];
@@ -542,7 +533,7 @@ int background_functions(
   /* Lambda */
   if (pba->has_lambda == _TRUE_) {
     /* pvecback[pba->index_bg_rho_lambda] = pba->Omega0_lambda * pow(pba->H0,2); */
-    pvecback[pba->index_bg_rho_lambda] = (pba->Omega0_lambda + (pba->Q_dm / 2.0) * (pow(1.0/a, 2) - 1.0)) * pow(pba->H0,2);
+    pvecback[pba->index_bg_rho_lambda] = (pba->Omega0_lambda + (pba->Q_dm / 2.0) * (pow(a0/a, 2) - 1.0)) * pow(H0,2);
     rho_tot += pvecback[pba->index_bg_rho_lambda];
     p_tot -= pvecback[pba->index_bg_rho_lambda];
   }
@@ -2667,26 +2658,8 @@ int background_derivs(
   }
 
   if (pba->has_fld == _TRUE_) {
-
-    if (pba->has_ddf == _TRUE_) {
-      /** DDF: modified DE continuity equation
-       *
-       *   d(rho_fld)/dloga = -3(1+w)*rho_fld  -  alpha_ddf * rho_cdm
-       *
-       * The second term is the energy received by DE from DM through the
-       * diffusion current Q = alpha_ddf * H * rho_cdm.  Energy is conserved
-       * because what DE gains (+alpha*rho_cdm) exactly cancels what DM loses
-       * (encoded in the modified rho_cdm power-law used in background_functions).
-       * For alpha_ddf > 0: DM loses energy → DE gains it.
-       * For alpha_ddf < 0: DE loses energy → DM gains it. */
-      dy[pba->index_bi_rho_fld] = -3.*(1.+pvecback[pba->index_bg_w_fld])*y[pba->index_bi_rho_fld]
-                                   - pba->alpha_ddf * pvecback[pba->index_bg_rho_cdm];
-    }
-    else {
-      /** - Compute fld density \f$ d\rho/dloga = -3 (1+w_{fld}(a)) \rho \f$ */
-      dy[pba->index_bi_rho_fld] = -3.*(1.+pvecback[pba->index_bg_w_fld])*y[pba->index_bi_rho_fld];
-    }
-
+    /** - Compute fld density \f$ d\rho/dloga = -3 (1+w_{fld}(a)) \rho \f$ */
+    dy[pba->index_bi_rho_fld] = -3.*(1.+pvecback[pba->index_bg_w_fld])*y[pba->index_bi_rho_fld];
   }
 
   if (pba->has_scf == _TRUE_) {
